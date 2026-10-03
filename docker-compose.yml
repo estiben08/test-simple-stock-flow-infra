@@ -1,0 +1,81 @@
+services:
+  # ----------------------------------------
+  # BASE DE DATOS (MySQL 8.4)
+  # ----------------------------------------
+  db:
+    image: mysql:8.4
+    container_name: stock_flow_db
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: simple_stock_flow
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_USER: stock_user
+      MYSQL_PASSWORD: stock_password
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - stock_network
+
+  # ----------------------------------------
+  # BACKEND (PHP-FPM)
+  # ----------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    container_name: stock_flow_api
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ../test-simple-stock-flow-api:/var/www/html
+      - api_vendor:/var/www/html/vendor
+    depends_on:
+      - db
+    networks:
+      - stock_network
+
+  # ----------------------------------------
+  # SERVIDOR WEB (Nginx para servir la API)
+  # ----------------------------------------
+  web:
+    image: nginx:alpine
+    container_name: stock_flow_web
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ../test-simple-stock-flow-api:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - api
+    networks:
+      - stock_network
+
+  # ----------------------------------------
+  # FRONTEND (React / Vite)
+  # ----------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    container_name: stock_flow_app
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../test-simple-stock-flow-app:/app
+      - app_node_modules:/app/node_modules
+    networks:
+      - stock_network
+
+volumes:
+  db_data:
+  api_vendor: # Volumen anónimo para dependencias PHP (ADR-010)
+  app_node_modules: # Volumen anónimo para dependencias Node (ADR-010)
+
+networks:
+  stock_network:
+    driver: bridge
